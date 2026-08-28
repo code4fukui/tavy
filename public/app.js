@@ -338,7 +338,6 @@ function threadRow(item, depth) {
     actions.append(placeholder);
   }
   actions.append(
-    rowAction("reply", item, "↩", "返信"),
     rowAction("like", item, item.liked ? `♥ ${item.likes}` : `♡ ${item.likes}`, "いいね"),
     rowAction("bookmark", item, item.bookmarked ? "◆" : "◇", "ブックマーク"),
   );

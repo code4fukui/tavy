@@ -228,3 +228,19 @@ Deno.test("編集時の空欄保存は削除として扱う", async () => {
       .posts;
   assertEquals(posts.length, 0);
 });
+
+Deno.test("同じ端末から同じ内容を重複投稿できない", async () => {
+  const { roomId, handler } = testApp();
+  const first = await request(handler, "/api/posts", {
+    room_id: roomId,
+    body: "同じ内容",
+    mood: "note",
+  });
+  const cookie = first.headers.get("set-cookie")?.split(";")[0] ?? "";
+  const duplicate = await request(handler, "/api/posts", {
+    room_id: roomId,
+    body: "同じ内容",
+    mood: "note",
+  }, cookie);
+  assertEquals(duplicate.status, 409);
+});

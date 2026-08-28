@@ -164,6 +164,14 @@ export function createHandler(db: Database, publicDir = "public", secureCookie =
         ) {
           return json({ error: "返信先が見つかりません" }, 404, visitor.cookie);
         }
+        if (
+          db.prepare(
+            "SELECT 1 FROM posts WHERE room_id = ? AND visitor_id = ? AND body = ? LIMIT 1",
+          )
+            .get(roomId, visitor.id, body)
+        ) {
+          return json({ error: "同じ内容のつぶやみは投稿できません" }, 409, visitor.cookie);
+        }
         const result = db.prepare(
           "INSERT INTO posts (body, mood, room_id, parent_id, visitor_id) VALUES (?, ?, ?, ?, ?)",
         ).run(body, mood, roomId, parentId, visitor.id);
