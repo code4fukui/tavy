@@ -288,6 +288,8 @@ function renderFilteredGraph() {
     ? posts.filter((post) => post.bookmarked)
     : filter === "own"
     ? posts.filter((post) => post.own)
+    : filter === "question"
+    ? posts.filter((post) => /[？?]$/.test(post.body.trimEnd()))
     : posts;
   renderGraph(filtered);
   $("#empty").hidden = filtered.length > 0;
