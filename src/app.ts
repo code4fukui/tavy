@@ -12,8 +12,8 @@ const staticTypes: Record<string, string> = {
 
 export function createHandler(db: Database, publicDir = "public", secureCookie = false) {
   const roomSockets = new Map<number, Set<WebSocket>>();
-  const notifyRoom = (roomId: number) => {
-    const message = JSON.stringify({ type: "changed" });
+  const notifyRoom = (roomId: number, mode: "delta" | "full" = "full") => {
+    const message = JSON.stringify({ type: "changed", mode });
     for (const socket of roomSockets.get(roomId) ?? []) {
       if (socket.readyState === WebSocket.OPEN) socket.send(message);
     }
@@ -137,13 +137,40 @@ export function createHandler(db: Database, publicDir = "public", secureCookie =
           { headers: { "content-type": "image/svg+xml; charset=utf-8" } },
         );
       }
+      const exportMatch = url.pathname.match(/^\/api\/rooms\/([A-Za-z0-9_-]+)\/export\.json$/);
+      if (exportMatch && request.method === "GET") {
+        const room = db.prepare("SELECT id, slug, name, created_at FROM rooms WHERE slug = ?")
+          .get(exportMatch[1]) as
+            | { id: number; slug: string; name: string; created_at: string }
+            | undefined;
+        if (!room) return json({ error: "ルームが見つかりません" }, 404, visitor.cookie);
+        const posts = db.prepare(`SELECT p.id, p.parent_id, p.body, p.mood, p.created_at,
+          count(DISTINCT r.visitor_id) AS likes,
+          count(DISTINCT child.id) AS replies
+          FROM posts p LEFT JOIN reactions r ON r.post_id = p.id
+          LEFT JOIN posts child ON child.parent_id = p.id
+          WHERE p.room_id = ? GROUP BY p.id ORDER BY p.created_at ASC`).all(room.id);
+        const payload = JSON.stringify({ room, posts }, null, 2);
+        return new Response(payload, {
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "content-disposition": `attachment; filename="tavy-${room.slug}.json"`,
+          },
+        });
+      }
       if (url.pathname === "/api/posts" && request.method === "GET") {
         const room = findRoom(db, url.searchParams.get("room") ?? "");
         if (!room) {
           return json({ error: "ルームが見つかりません" }, 404, visitor.cookie);
         }
         const savedOnly = url.searchParams.get("saved") === "1";
-        return json({ posts: listPosts(db, room.id, visitor.id, savedOnly) }, 200, visitor.cookie);
+        const sinceValue = Number(url.searchParams.get("since") ?? "0");
+        const sinceId = Number.isSafeInteger(sinceValue) && sinceValue > 0 ? sinceValue : 0;
+        return json(
+          { posts: listPosts(db, room.id, visitor.id, savedOnly, sinceId) },
+          200,
+          visitor.cookie,
+        );
       }
       if (url.pathname === "/api/posts" && request.method === "POST") {
         const input = await readJson(request);
@@ -175,7 +202,7 @@ export function createHandler(db: Database, publicDir = "public", secureCookie =
         const result = db.prepare(
           "INSERT INTO posts (body, mood, room_id, parent_id, visitor_id) VALUES (?, ?, ?, ?, ?)",
         ).run(body, mood, roomId, parentId, visitor.id);
-        notifyRoom(roomId);
+        notifyRoom(roomId, "delta");
         return json({ id: Number(result.lastInsertRowid) }, 201, visitor.cookie);
       }
       const ownPost = url.pathname.match(/^\/api\/posts\/(\d+)$/);
@@ -310,10 +337,17 @@ function findRoom(db: Database, value: string): { id: number } | undefined {
   return db.prepare("SELECT id FROM rooms WHERE slug = ?").get(value) as { id: number } | undefined;
 }
 
-function listPosts(db: Database, roomId: number, visitorId: string, savedOnly: boolean) {
+function listPosts(
+  db: Database,
+  roomId: number,
+  visitorId: string,
+  savedOnly: boolean,
+  sinceId = 0,
+) {
   const saved = savedOnly
     ? "JOIN bookmarks own_bookmark ON own_bookmark.post_id = p.id AND own_bookmark.visitor_id = ?"
     : "";
+  const since = sinceId > 0 ? " AND p.id > ?" : "";
   return db.prepare(`SELECT p.id, p.parent_id, p.body, p.mood, p.created_at,
     CASE WHEN p.visitor_id = ? THEN 1 ELSE 0 END AS own,
     count(DISTINCT r.visitor_id) AS likes,
@@ -323,8 +357,16 @@ function listPosts(db: Database, roomId: number, visitorId: string, savedOnly: b
     FROM posts p LEFT JOIN reactions r ON r.post_id = p.id
     LEFT JOIN posts child ON child.parent_id = p.id
     LEFT JOIN bookmarks b ON b.post_id = p.id AND b.visitor_id = ? ${saved}
-    WHERE p.room_id = ? GROUP BY p.id ORDER BY p.created_at DESC LIMIT 2000`)
-    .all(visitorId, visitorId, visitorId, visitorId, ...(savedOnly ? [visitorId] : []), roomId)
+    WHERE p.room_id = ?${since} GROUP BY p.id ORDER BY p.created_at DESC LIMIT 2000`)
+    .all(
+      visitorId,
+      visitorId,
+      visitorId,
+      visitorId,
+      ...(savedOnly ? [visitorId] : []),
+      roomId,
+      ...(sinceId > 0 ? [sinceId] : []),
+    )
     .reverse();
 }
 

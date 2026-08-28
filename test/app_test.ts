@@ -98,6 +98,10 @@ Deno.test("未ログインではルーム一覧を公開せず共有URLとQRか�
   assertEquals(qr.status, 200);
   assertMatch(qr.headers.get("content-type") ?? "", /image\/svg\+xml/);
   assertMatch(await qr.text(), /<svg/);
+  const exported = await request(handler, "/api/rooms/test-room/export.json");
+  assertEquals(exported.status, 200);
+  assertMatch(exported.headers.get("content-disposition") ?? "", /attachment/);
+  assertEquals((await exported.json()).room.slug, "test-room");
   const socketWithoutUpgrade = await request(handler, "/api/rooms/test-room/ws");
   assertEquals(socketWithoutUpgrade.status, 426);
 });
@@ -128,6 +132,9 @@ Deno.test("つぶやきと深さに制限のない返信をルーム単位で取
     rootId,
     childId,
   ]);
+  const delta = (await (await request(handler, `/api/posts?room=test-room&since=${rootId}`)).json())
+    .posts;
+  assertEquals(delta.map((post: { id: number }) => post.id), [childId, childId + 1]);
 });
 
 Deno.test("別ルームのつぶやきには返信できない", async () => {

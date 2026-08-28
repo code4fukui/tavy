@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#f6f3ec">
     <meta name="description" content="今、感じたコトを、みんなの価値に変える共有サービス">
     <title>tavy（タヴィー）— 今、感じたコトを、みんなの価値に。</title>
-    <link rel="stylesheet" href="/style.css?v=20260828-11">
-    <script type="module" src="/app.js?v=20260828-11"></script>
+    <link rel="stylesheet" href="/style.css?v=20260828-16">
+    <script type="module" src="/app.js?v=20260828-16"></script>
   </head>
   <body>
     <header class="topbar">
@@ -53,13 +53,16 @@
               aria-pressed="false">♥</button>
             <button type="button" data-filter="bookmarked"
               aria-label="ブックマーク付き" title="ブックマーク付き" aria-pressed="false">◆</button>
-            <button type="button" data-filter="own" aria-pressed="false">自分</button>
             <button type="button" data-filter="question" aria-label="質問" title="質問"
               aria-pressed="false">？</button>
             <button type="button" data-filter="replied" aria-label="返信付き" title="返信付き"
               aria-pressed="false">↩</button>
+            <button type="button" data-filter="own" aria-pressed="false">自分</button>
           </div>
-          <button id="share-room" class="text-button" type="button">共有</button>
+          <div class="room-tools">
+            <button id="share-room" class="text-button" type="button">共有</button>
+            <a id="export-room" class="text-button" download>JSON</a>
+          </div>
         </div>
         <section class="composer" aria-labelledby="compose-title">
           <button id="compose-close" class="compose-close" type="button"

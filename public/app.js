@@ -125,11 +125,11 @@ $("#rooms").addEventListener("click", (event) => {
 $("#reply-cancel").addEventListener("click", clearReply);
 $("#compose-open").addEventListener("click", () => openComposer());
 $("#compose-close").addEventListener("click", closeComposer);
-$("#refresh").addEventListener("click", loadPosts);
+$("#refresh").addEventListener("click", () => loadPosts(true));
 $("#view-toggle").addEventListener("click", () => {
   savedOnly = !savedOnly;
   $("#view-toggle").setAttribute("aria-pressed", String(savedOnly));
-  loadPosts();
+  loadPosts(true);
 });
 document.querySelector(".map-filters").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-filter]");
@@ -198,9 +198,10 @@ async function openRoom(slug, updateUrl = false) {
   document.body.classList.add("room-view");
   $("#room-content").hidden = false;
   $("#current-room-name").textContent = room.name;
+  $("#export-room").href = `/api/rooms/${room.slug}/export.json`;
   clearReply();
   closeComposer();
-  await loadPosts();
+  await loadPosts(true);
   connectRoomSocket();
 }
 function readRoomHistory() {
@@ -243,9 +244,15 @@ function connectRoomSocket() {
     }, 25000);
   });
   socket.addEventListener("message", (event) => {
-    if (event.data !== '{"type":"changed"}') return;
+    let change;
+    try {
+      change = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (change.type !== "changed") return;
     clearTimeout(realtimeRefresh);
-    realtimeRefresh = setTimeout(() => room && loadPosts(), 30);
+    realtimeRefresh = setTimeout(() => room && loadPosts(change.mode !== "delta"), 30);
   });
   socket.addEventListener("close", () => {
     if (roomSocket !== socket) return;
@@ -271,11 +278,14 @@ document.addEventListener("visibilitychange", () => {
     connectRoomSocket();
   }
 });
-async function loadPosts() {
+async function loadPosts(full = false) {
   if (!room || inlineReplyActive) return;
   const params = new URLSearchParams({ room: room.slug });
   if (savedOnly) params.set("saved", "1");
-  posts = (await api(`/api/posts?${params}`)).posts;
+  const sinceId = full || posts.length === 0 ? 0 : Math.max(...posts.map((post) => post.id));
+  if (sinceId > 0) params.set("since", String(sinceId));
+  const incoming = (await api(`/api/posts?${params}`)).posts;
+  posts = sinceId > 0 ? [...posts, ...incoming].slice(-2000) : incoming;
   renderFilteredGraph();
 }
 

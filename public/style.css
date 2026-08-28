@@ -163,6 +163,13 @@ button {
   margin: 0;
   font: 600 24px var(--serif);
 }
+.room-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
 .reply-target {
   position: relative;
   margin: -8px 0 18px;
@@ -974,6 +981,9 @@ footer {
   }
   .room-view .current-room .text-button {
     font-size: 11px;
+  }
+  .room-view .room-tools {
+    gap: 6px;
   }
   .node-menu {
     right: 10px;
