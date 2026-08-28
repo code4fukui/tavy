@@ -12,6 +12,9 @@ let rooms = [];
 let room = null;
 let posts = [];
 let replyTo = null;
+// Keep an in-progress inline reply across post list refreshes (for example, a
+// WebSocket update from another user).
+let inlineReplyState = null;
 let savedOnly = false;
 let filter = "all";
 let followLatest = true;
@@ -309,7 +312,18 @@ function renderGraph(items) {
   }
   roots.forEach((root) => append(root, 0));
   graph.replaceChildren(...rows);
+  restoreInlineReply(items);
   if (followLatest) requestAnimationFrame(() => notes.scrollTop = notes.scrollHeight);
+}
+
+function restoreInlineReply(items) {
+  if (!inlineReplyState) return;
+  const item = items.find((post) => post.id === inlineReplyState.postId);
+  if (!item) {
+    inlineReplyState = null;
+    return;
+  }
+  showInlineReply(item, inlineReplyState.value, false);
 }
 
 function threadRow(item, depth) {
@@ -360,6 +374,7 @@ function rowAction(action, item, label, title) {
 
 function showInlineEdit(item) {
   followLatest = false;
+  inlineReplyState = null;
   document.querySelector(".inline-reply")?.remove();
   const row = graph.querySelector(`[data-id="${item.id}"]`);
   const editor = inlineForm(item.body, "保存", async (value) => {
@@ -415,9 +430,10 @@ function inlineForm(value, submitLabel, save, allowEmpty = false) {
   return editor;
 }
 
-function showInlineReply(item) {
+function showInlineReply(item, value = "", focus = true) {
   followLatest = false;
   document.querySelector(".inline-reply")?.remove();
+  inlineReplyState = { postId: item.id, value };
   const row = graph.querySelector(`[data-id="${item.id}"]`);
   const reply = document.createElement("form");
   reply.className = "inline-reply";
@@ -425,6 +441,7 @@ function showInlineReply(item) {
   const input = document.createElement("textarea");
   input.maxLength = 280;
   input.rows = 1;
+  input.value = value;
   input.placeholder = `「${item.body.slice(0, 24)}」に返信`;
   input.required = true;
   input.addEventListener("keydown", (event) => {
@@ -439,8 +456,14 @@ function showInlineReply(item) {
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.textContent = "キャンセル";
-  cancel.addEventListener("click", () => reply.remove());
+  cancel.addEventListener("click", () => {
+    inlineReplyState = null;
+    reply.remove();
+  });
   reply.append(input, submit, cancel);
+  input.addEventListener("input", () => {
+    if (inlineReplyState?.postId === item.id) inlineReplyState.value = input.value;
+  });
   reply.addEventListener("submit", async (event) => {
     event.preventDefault();
     await api("/api/posts", {
@@ -452,14 +475,17 @@ function showInlineReply(item) {
         mood: "note",
       }),
     });
+    inlineReplyState = null;
     reply.remove();
     await loadPosts();
   });
   row.after(reply);
-  input.focus({ preventScroll: true });
-  requestAnimationFrame(() => {
-    reply.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  });
+  if (focus) {
+    input.focus({ preventScroll: true });
+    requestAnimationFrame(() => {
+      reply.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }
 }
 
 function threadDepth(item) {
@@ -473,6 +499,7 @@ function threadDepth(item) {
 }
 function clearReply() {
   replyTo = null;
+  inlineReplyState = null;
   $("#reply-target").hidden = true;
   $("#compose-title").textContent = "つぶやく";
 }
