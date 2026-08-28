@@ -63,6 +63,16 @@ TAVY_SECURE_COOKIE=1 deno task start
 に配置し、systemdで単一のDenoプロセスを起動、NGINXでHTTPSを終端する例です。 事前にDeno
 2.x、NGINX、TLS証明書を用意してください。
 
+Denoをユーザーのホームディレクトリへインストールした場合、`sudo`やsystemdからはPATHが見えません。最初に実行ファイルをsystem-wideな場所へ配置します。
+
+```sh
+command -v deno
+sudo install -m 0755 "$(command -v deno)" /usr/local/bin/deno
+/usr/local/bin/deno --version
+```
+
+`command -v deno`が何も返さない場合は、先にDeno 2.xをインストールしてください。
+
 ### 1. アプリケーションを配置
 
 ```sh
@@ -73,8 +83,8 @@ sudo git clone https://example.com/your/tavy.git /opt/tavy
 sudo mkdir -p /opt/tavy/data
 sudo chown tavy:tavy /opt/tavy/data
 cd /opt/tavy
-sudo -u tavy DENO_DIR=/var/cache/tavy deno cache src/server.ts
-sudo -u tavy DENO_DIR=/var/cache/tavy deno task check
+sudo -u tavy env DENO_DIR=/var/cache/tavy /usr/local/bin/deno cache src/server.ts
+sudo -u tavy env DENO_DIR=/var/cache/tavy /usr/local/bin/deno task check
 ```
 
 リポジトリURLは実際のURLへ置き換えてください。ソースコードは管理者のみが更新し、`data/`だけをtavyユーザーが書き込めるようにします。
@@ -111,7 +121,7 @@ ReadWritePaths=/opt/tavy/data /var/cache/tavy
 WantedBy=multi-user.target
 ```
 
-`deno`の場所は`command -v deno`で確認し、`ExecStart`へ設定してください。
+別のsystem-wideな場所へDenoを配置した場合は、`ExecStart`もその絶対パスへ変更してください。
 
 ```sh
 sudo systemctl daemon-reload
@@ -175,8 +185,8 @@ sudo systemctl reload nginx
 ```sh
 cd /opt/tavy
 sudo git pull --ff-only
-sudo -u tavy DENO_DIR=/var/cache/tavy deno cache src/server.ts
-sudo -u tavy DENO_DIR=/var/cache/tavy deno task check
+sudo -u tavy env DENO_DIR=/var/cache/tavy /usr/local/bin/deno cache src/server.ts
+sudo -u tavy env DENO_DIR=/var/cache/tavy /usr/local/bin/deno task check
 sudo systemctl restart tavy
 sudo journalctl -u tavy -n 100 --no-pager
 ```

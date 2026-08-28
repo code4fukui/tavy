@@ -3,7 +3,8 @@ const form = $("#post-form");
 const memo = $("#memo");
 const graph = $("#graph");
 const notes = $("#notes");
-const authDialog = $("#auth-dialog");
+const loginDialog = $("#login-dialog");
+const registerDialog = $("#register-dialog");
 const roomDialog = $("#room-dialog");
 const shareDialog = $("#share-dialog");
 let user = null;
@@ -14,7 +15,6 @@ let replyTo = null;
 let savedOnly = false;
 let filter = "all";
 let followLatest = true;
-let authMode = "login";
 let roomSocket = null;
 let socketRetry = null;
 let realtimeRefresh = null;
@@ -49,40 +49,45 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-$("#auth-open").addEventListener("click", () => authDialog.showModal());
+$("#login-open").addEventListener("click", () => loginDialog.showModal());
+$("#register-open").addEventListener("click", () => registerDialog.showModal());
 $("#create-room-open").addEventListener(
   "click",
-  () => user ? roomDialog.showModal() : authDialog.showModal(),
+  () => user ? roomDialog.showModal() : registerDialog.showModal(),
 );
 document.querySelectorAll(".dialog-close").forEach((button) =>
   button.addEventListener("click", () => button.closest("dialog").close())
 );
-document.querySelector(".auth-mode").addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-auth-mode]");
-  if (!button) return;
-  authMode = button.dataset.authMode;
-  document.querySelectorAll("[data-auth-mode]").forEach((item) =>
-    item.setAttribute("aria-pressed", String(item === button))
-  );
-  const registering = authMode === "register";
-  $("#auth-title").textContent = registering ? "新規登録" : "ログイン";
-  $("#auth-submit").textContent = registering ? "新規登録" : "ログイン";
-  $("#auth-password").setAttribute(
-    "autocomplete",
-    registering ? "new-password" : "current-password",
-  );
-  $("#auth-password").value = "";
-  $("#auth-password").focus();
-});
-$("#auth-form").addEventListener("submit", async (event) => {
+$("#login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
+  const loginForm = event.currentTarget;
   try {
-    const result = await api(`/api/${authMode}`, {
+    const result = await api("/api/login", {
       method: "POST",
-      body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))),
+      body: JSON.stringify(Object.fromEntries(new FormData(loginForm))),
     });
     user = result.user;
-    authDialog.close();
+    loginDialog.close();
+    syncUser();
+    await loadRooms();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+$("#register-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const registerForm = event.currentTarget;
+  const body = Object.fromEntries(new FormData(registerForm));
+  if (body.password !== body.password_confirm) {
+    showToast("パスワードが一致しません");
+    return;
+  }
+  delete body.password_confirm;
+  try {
+    const result = await api("/api/register", { method: "POST", body: JSON.stringify(body) });
+    user = result.user;
+    registerDialog.close();
+    registerForm.reset();
     syncUser();
     await loadRooms();
   } catch (error) {
@@ -147,7 +152,8 @@ $("#native-share").addEventListener("click", async () => {
 
 function syncUser() {
   $("#user-label").textContent = user ? user.id : "";
-  $("#auth-open").hidden = Boolean(user);
+  $("#login-open").hidden = Boolean(user);
+  $("#register-open").hidden = Boolean(user);
   $("#logout").hidden = !user;
 }
 async function loadRooms() {

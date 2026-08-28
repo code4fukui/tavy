@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#f6f3ec">
     <meta name="description" content="今、感じたコトを、みんなの価値に変える共有サービス">
     <title>tavy（タヴィー）— 今、感じたコトを、みんなの価値に。</title>
-    <link rel="stylesheet" href="/style.css?v=20260828-4">
-    <script type="module" src="/app.js?v=20260828-4"></script>
+    <link rel="stylesheet" href="/style.css?v=20260828-5">
+    <script type="module" src="/app.js?v=20260828-5"></script>
   </head>
   <body>
     <header class="topbar">
@@ -17,7 +17,8 @@
       </a>
       <div class="account">
         <span id="user-label"></span>
-        <button class="view-button" id="auth-open" type="button">ログイン / 登録</button>
+        <button class="auth-link" id="login-open" type="button">ログイン</button>
+        <button class="auth-link" id="register-open" type="button">新規登録</button>
         <button class="view-button" id="logout" type="button" hidden>ログアウト</button>
       </div>
     </header>
@@ -99,9 +100,11 @@
     </main>
 
     <dialog
-      id="auth-dialog"><button class="dialog-close" type="button" aria-label="閉じる">×</button><p class="eyebrow">WELCOME TO TAVY</p><h2 id="auth-title">ログイン</h2>
-      <div class="auth-mode" role="group" aria-label="ログインまたは新規登録"><button type="button" data-auth-mode="login" aria-pressed="true">ログイン</button><button type="button" data-auth-mode="register" aria-pressed="false">新規登録</button></div>
-      <form id="auth-form"><label>ID<input name="id" minlength="3" maxlength="32" pattern="[A-Za-z0-9_-]+" autocomplete="username" required></label><label>パスワード<input id="auth-password" name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required></label><button id="auth-submit" class="send" type="submit">ログイン</button></form>
+      id="login-dialog"><button class="dialog-close" type="button" aria-label="閉じる">×</button><p class="eyebrow">WELCOME BACK</p><h2>ログイン</h2>
+      <form id="login-form" action="/api/login" method="post"><label>ID<input name="id" minlength="3" maxlength="32" pattern="[A-Za-z0-9_-]+" autocomplete="username" required></label><label>パスワード<input name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required></label><button class="send" type="submit">ログイン</button></form></dialog>
+    <dialog
+      id="register-dialog"><button class="dialog-close" type="button" aria-label="閉じる">×</button><p class="eyebrow">JOIN TAVY</p><h2>新規登録</h2>
+      <form id="register-form" action="/api/register" method="post"><label>ID<input name="id" minlength="3" maxlength="32" pattern="[A-Za-z0-9_-]+" autocomplete="username" required></label><label>パスワード<input name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" passwordrules="minlength: 8; maxlength: 128;" required></label><label>パスワード（確認）<input name="password_confirm" type="password" minlength="8" maxlength="128" autocomplete="new-password" passwordrules="minlength: 8; maxlength: 128;" required></label><button class="send" type="submit">新規登録</button></form>
       <p class="hint">IDは半角英数字・_-で3〜32文字、パスワードは8文字以上</p></dialog>
     <dialog
       id="room-dialog"><button class="dialog-close" type="button" aria-label="閉じる">×</button><p class="eyebrow">NEW ROOM</p><h2>共有ルームを作る</h2><form id="room-form"><label>ルーム名<input name="name" maxlength="60" placeholder="例：金曜のアイデア会議" required></label><button class="send">作成する</button></form></dialog>

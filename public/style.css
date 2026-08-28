@@ -239,25 +239,17 @@ dialog input {
   display: flex;
   gap: 8px;
 }
-.auth-mode {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 3px;
-  margin: -8px 0 20px;
-  padding: 3px;
-  background: var(--paper);
-}
-.auth-mode button {
-  min-height: 38px;
+.auth-link {
+  padding: 5px 2px;
   border: 0;
+  border-bottom: 1px solid transparent;
   background: transparent;
-  color: var(--muted);
-  font-weight: 700;
+  color: var(--ink);
+  font: 650 12px var(--sans);
   cursor: pointer;
 }
-.auth-mode button[aria-pressed="true"] {
-  background: var(--white);
-  color: var(--ink);
+.auth-link:hover {
+  border-bottom-color: currentColor;
 }
 .secondary {
   padding: 10px 16px;
