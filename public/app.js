@@ -297,6 +297,8 @@ function renderFilteredGraph() {
 }
 
 function renderGraph(items) {
+  const activeReplyInput = document.activeElement?.closest?.(".inline-reply textarea");
+  const replyWasFocused = Boolean(activeReplyInput);
   const byParent = new Map();
   for (const item of items) {
     const key = item.parent_id ?? 0;
@@ -312,6 +314,7 @@ function renderGraph(items) {
   }
   roots.forEach((root) => append(root, 0));
   graph.replaceChildren(...rows);
+  if (replyWasFocused && inlineReplyState) inlineReplyState.focused = true;
   restoreInlineReply(items);
   if (followLatest) requestAnimationFrame(() => notes.scrollTop = notes.scrollHeight);
 }
@@ -323,7 +326,7 @@ function restoreInlineReply(items) {
     inlineReplyState = null;
     return;
   }
-  showInlineReply(item, inlineReplyState.value, false);
+  showInlineReply(item, inlineReplyState.value, inlineReplyState.focused, false);
 }
 
 function threadRow(item, depth) {
@@ -430,10 +433,10 @@ function inlineForm(value, submitLabel, save, allowEmpty = false) {
   return editor;
 }
 
-function showInlineReply(item, value = "", focus = true) {
+function showInlineReply(item, value = "", focus = true, scroll = true) {
   followLatest = false;
   document.querySelector(".inline-reply")?.remove();
-  inlineReplyState = { postId: item.id, value };
+  inlineReplyState = { postId: item.id, value, focused: focus };
   const row = graph.querySelector(`[data-id="${item.id}"]`);
   const reply = document.createElement("form");
   reply.className = "inline-reply";
@@ -462,7 +465,16 @@ function showInlineReply(item, value = "", focus = true) {
   });
   reply.append(input, submit, cancel);
   input.addEventListener("input", () => {
-    if (inlineReplyState?.postId === item.id) inlineReplyState.value = input.value;
+    if (inlineReplyState?.postId === item.id) {
+      inlineReplyState.value = input.value;
+      inlineReplyState.focused = true;
+    }
+  });
+  input.addEventListener("focus", () => {
+    if (inlineReplyState?.postId === item.id) inlineReplyState.focused = true;
+  });
+  input.addEventListener("blur", () => {
+    if (inlineReplyState?.postId === item.id) inlineReplyState.focused = false;
   });
   reply.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -482,9 +494,11 @@ function showInlineReply(item, value = "", focus = true) {
   row.after(reply);
   if (focus) {
     input.focus({ preventScroll: true });
-    requestAnimationFrame(() => {
-      reply.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
+    if (scroll) {
+      requestAnimationFrame(() => {
+        reply.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      });
+    }
   }
 }
 
