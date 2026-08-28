@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#f6f3ec">
     <meta name="description" content="今、感じたコトを、みんなの価値に変える共有サービス">
     <title>tavy（タヴィー）— 今、感じたコトを、みんなの価値に。</title>
-    <link rel="stylesheet" href="/style.css?v=20260828-7">
-    <script type="module" src="/app.js?v=20260828-7"></script>
+    <link rel="stylesheet" href="/style.css?v=20260828-9">
+    <script type="module" src="/app.js?v=20260828-9"></script>
   </head>
   <body>
     <header class="topbar">
@@ -49,11 +49,15 @@
           <h2 id="current-room-name"></h2>
           <div class="map-filters" role="group" aria-label="つぶやきの絞り込み">
             <button type="button" data-filter="all" aria-pressed="true">すべて</button>
-            <button type="button" data-filter="liked" aria-pressed="false">♥ いいね</button>
+            <button type="button" data-filter="liked" aria-label="いいね付き" title="いいね付き"
+              aria-pressed="false">♥</button>
             <button type="button" data-filter="bookmarked"
-              aria-pressed="false">◆ ブックマーク</button>
+              aria-label="ブックマーク付き" title="ブックマーク付き" aria-pressed="false">◆</button>
             <button type="button" data-filter="own" aria-pressed="false">自分</button>
-            <button type="button" data-filter="question" aria-pressed="false">？ 質問</button>
+            <button type="button" data-filter="question" aria-label="質問" title="質問"
+              aria-pressed="false">？</button>
+            <button type="button" data-filter="replied" aria-label="返信付き" title="返信付き"
+              aria-pressed="false">↩</button>
           </div>
           <button id="share-room" class="text-button" type="button">共有</button>
         </div>

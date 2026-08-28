@@ -12,9 +12,6 @@ let rooms = [];
 let room = null;
 let posts = [];
 let replyTo = null;
-// Keep an in-progress inline reply across post list refreshes (for example, a
-// WebSocket update from another user).
-let inlineReplyState = null;
 let savedOnly = false;
 let filter = "all";
 let followLatest = true;
@@ -22,6 +19,7 @@ let roomSocket = null;
 let socketRetry = null;
 let realtimeRefresh = null;
 let socketHeartbeat = null;
+let inlineReplyActive = false;
 
 memo.addEventListener("input", () => $("#counter").textContent = `${memo.value.length} / 280`);
 memo.addEventListener("keydown", (event) => {
@@ -274,7 +272,7 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 async function loadPosts() {
-  if (!room) return;
+  if (!room || inlineReplyActive) return;
   const params = new URLSearchParams({ room: room.slug });
   if (savedOnly) params.set("saved", "1");
   posts = (await api(`/api/posts?${params}`)).posts;
@@ -290,6 +288,8 @@ function renderFilteredGraph() {
     ? posts.filter((post) => post.own)
     : filter === "question"
     ? posts.filter((post) => /[？?]$/.test(post.body.trimEnd()))
+    : filter === "replied"
+    ? posts.filter((post) => post.replies > 0)
     : posts;
   renderGraph(filtered);
   $("#empty").hidden = filtered.length > 0;
@@ -299,8 +299,6 @@ function renderFilteredGraph() {
 }
 
 function renderGraph(items) {
-  const activeReplyInput = document.activeElement?.closest?.(".inline-reply textarea");
-  const replyWasFocused = Boolean(activeReplyInput);
   const byParent = new Map();
   for (const item of items) {
     const key = item.parent_id ?? 0;
@@ -316,19 +314,7 @@ function renderGraph(items) {
   }
   roots.forEach((root) => append(root, 0));
   graph.replaceChildren(...rows);
-  if (replyWasFocused && inlineReplyState) inlineReplyState.focused = true;
-  restoreInlineReply(items);
   if (followLatest) requestAnimationFrame(() => notes.scrollTop = notes.scrollHeight);
-}
-
-function restoreInlineReply(items) {
-  if (!inlineReplyState) return;
-  const item = items.find((post) => post.id === inlineReplyState.postId);
-  if (!item) {
-    inlineReplyState = null;
-    return;
-  }
-  showInlineReply(item, inlineReplyState.value, inlineReplyState.focused, false);
 }
 
 function threadRow(item, depth) {
@@ -352,6 +338,7 @@ function threadRow(item, depth) {
     actions.append(placeholder);
   }
   actions.append(
+    rowAction("reply", item, "↩", "返信"),
     rowAction("like", item, item.liked ? `♥ ${item.likes}` : `♡ ${item.likes}`, "いいね"),
     rowAction("bookmark", item, item.bookmarked ? "◆" : "◇", "ブックマーク"),
   );
@@ -379,7 +366,7 @@ function rowAction(action, item, label, title) {
 
 function showInlineEdit(item) {
   followLatest = false;
-  inlineReplyState = null;
+  inlineReplyActive = false;
   document.querySelector(".inline-reply")?.remove();
   const row = graph.querySelector(`[data-id="${item.id}"]`);
   const editor = inlineForm(item.body, "保存", async (value) => {
@@ -435,10 +422,11 @@ function inlineForm(value, submitLabel, save, allowEmpty = false) {
   return editor;
 }
 
-function showInlineReply(item, value = "", focus = true, scroll = true) {
+function showInlineReply(item) {
   followLatest = false;
+  closeComposer();
+  inlineReplyActive = true;
   document.querySelector(".inline-reply")?.remove();
-  inlineReplyState = { postId: item.id, value, focused: focus };
   const row = graph.querySelector(`[data-id="${item.id}"]`);
   const reply = document.createElement("form");
   reply.className = "inline-reply";
@@ -446,7 +434,6 @@ function showInlineReply(item, value = "", focus = true, scroll = true) {
   const input = document.createElement("textarea");
   input.maxLength = 280;
   input.rows = 1;
-  input.value = value;
   input.placeholder = `「${item.body.slice(0, 24)}」に返信`;
   input.required = true;
   input.addEventListener("keydown", (event) => {
@@ -462,46 +449,36 @@ function showInlineReply(item, value = "", focus = true, scroll = true) {
   cancel.type = "button";
   cancel.textContent = "キャンセル";
   cancel.addEventListener("click", () => {
-    inlineReplyState = null;
+    inlineReplyActive = false;
     reply.remove();
   });
   reply.append(input, submit, cancel);
-  input.addEventListener("input", () => {
-    if (inlineReplyState?.postId === item.id) {
-      inlineReplyState.value = input.value;
-      inlineReplyState.focused = true;
-    }
-  });
-  input.addEventListener("focus", () => {
-    if (inlineReplyState?.postId === item.id) inlineReplyState.focused = true;
-  });
-  input.addEventListener("blur", () => {
-    if (inlineReplyState?.postId === item.id) inlineReplyState.focused = false;
-  });
   reply.addEventListener("submit", async (event) => {
     event.preventDefault();
-    await api("/api/posts", {
-      method: "POST",
-      body: JSON.stringify({
-        room_id: room.id,
-        parent_id: item.id,
-        body: input.value,
-        mood: "note",
-      }),
-    });
-    inlineReplyState = null;
-    reply.remove();
-    await loadPosts();
+    submit.disabled = true;
+    try {
+      await api("/api/posts", {
+        method: "POST",
+        body: JSON.stringify({
+          room_id: room.id,
+          parent_id: item.id,
+          body: input.value,
+          mood: "note",
+        }),
+      });
+      inlineReplyActive = false;
+      reply.remove();
+      await loadPosts();
+    } catch (error) {
+      submit.disabled = false;
+      showToast(error.message);
+    }
   });
   row.after(reply);
-  if (focus) {
-    input.focus({ preventScroll: true });
-    if (scroll) {
-      requestAnimationFrame(() => {
-        reply.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      });
-    }
-  }
+  input.focus({ preventScroll: true });
+  requestAnimationFrame(() => {
+    reply.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
 }
 
 function threadDepth(item) {
@@ -513,9 +490,10 @@ function threadDepth(item) {
   }
   return depth;
 }
+
 function clearReply() {
   replyTo = null;
-  inlineReplyState = null;
+  inlineReplyActive = false;
   $("#reply-target").hidden = true;
   $("#compose-title").textContent = "つぶやく";
 }

@@ -309,9 +309,11 @@ function listPosts(db: Database, roomId: number, visitorId: string, savedOnly: b
   return db.prepare(`SELECT p.id, p.parent_id, p.body, p.mood, p.created_at,
     CASE WHEN p.visitor_id = ? THEN 1 ELSE 0 END AS own,
     count(DISTINCT r.visitor_id) AS likes,
+    count(DISTINCT child.id) AS replies,
     max(CASE WHEN r.visitor_id = ? THEN 1 ELSE 0 END) AS liked,
     max(CASE WHEN b.visitor_id = ? THEN 1 ELSE 0 END) AS bookmarked
     FROM posts p LEFT JOIN reactions r ON r.post_id = p.id
+    LEFT JOIN posts child ON child.parent_id = p.id
     LEFT JOIN bookmarks b ON b.post_id = p.id AND b.visitor_id = ? ${saved}
     WHERE p.room_id = ? GROUP BY p.id ORDER BY p.created_at DESC LIMIT 2000`)
     .all(visitorId, visitorId, visitorId, visitorId, ...(savedOnly ? [visitorId] : []), roomId)
