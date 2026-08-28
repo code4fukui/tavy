@@ -285,7 +285,13 @@ async function loadPosts(full = false) {
   const sinceId = full || posts.length === 0 ? 0 : Math.max(...posts.map((post) => post.id));
   if (sinceId > 0) params.set("since", String(sinceId));
   const incoming = (await api(`/api/posts?${params}`)).posts;
-  posts = sinceId > 0 ? [...posts, ...incoming].slice(-2000) : incoming;
+  if (sinceId > 0) {
+    const merged = new Map(posts.map((post) => [post.id, post]));
+    for (const post of incoming) merged.set(post.id, post);
+    posts = [...merged.values()].sort((a, b) => a.id - b.id).slice(-2000);
+  } else {
+    posts = incoming;
+  }
   renderFilteredGraph();
 }
 
