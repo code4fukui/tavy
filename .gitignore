@@ -1,0 +1,23 @@
+# Runtime data
+data/*
+!data/.gitkeep
+*.db
+*.db-shm
+*.db-wal
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Deno / Node tooling
+.deno/
+node_modules/
+coverage/
+
+# Editors and operating systems
+.DS_Store
+*.swp
+*.tmp
+.vscode/
+.idea/
