@@ -5,6 +5,7 @@ const graph = $("#graph");
 const notes = $("#notes");
 const loginDialog = $("#login-dialog");
 const registerDialog = $("#register-dialog");
+const passwordDialog = $("#password-dialog");
 const roomDialog = $("#room-dialog");
 const shareDialog = $("#share-dialog");
 let user = null;
@@ -52,6 +53,7 @@ form.addEventListener("submit", async (event) => {
 
 $("#login-open").addEventListener("click", () => loginDialog.showModal());
 $("#register-open").addEventListener("click", () => registerDialog.showModal());
+$("#user-label").addEventListener("click", () => passwordDialog.showModal());
 $("#create-room-open").addEventListener(
   "click",
   () => user ? roomDialog.showModal() : registerDialog.showModal(),
@@ -93,6 +95,28 @@ $("#register-form").addEventListener("submit", async (event) => {
     await loadRooms();
   } catch (error) {
     showToast(error.message);
+  }
+});
+$("#password-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const passwordForm = event.currentTarget;
+  const body = Object.fromEntries(new FormData(passwordForm));
+  if (body.new_password !== body.new_password_confirm) {
+    showToast("新しいパスワードが一致しません");
+    return;
+  }
+  delete body.new_password_confirm;
+  const button = passwordForm.querySelector("button[type=submit]");
+  button.disabled = true;
+  try {
+    await api("/api/password", { method: "POST", body: JSON.stringify(body) });
+    passwordDialog.close();
+    passwordForm.reset();
+    showToast("パスワードを変更しました");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
   }
 });
 $("#logout").addEventListener("click", async () => {
@@ -153,6 +177,7 @@ $("#native-share").addEventListener("click", async () => {
 
 function syncUser() {
   $("#user-label").textContent = user ? user.id : "";
+  $("#user-label").hidden = !user;
   $("#login-open").hidden = Boolean(user);
   $("#register-open").hidden = Boolean(user);
   $("#logout").hidden = !user;

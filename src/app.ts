@@ -66,6 +66,43 @@ export function createHandler(db: Database, publicDir = "public", secureCookie =
         if (sessionId) db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
         return json({ ok: true }, 200, expiredSessionCookie(secureCookie), visitor.cookie);
       }
+      if (url.pathname === "/api/password" && request.method === "POST") {
+        if (!user) return json({ error: "ログインしてください" }, 401, visitor.cookie);
+        const input = await readJson(request);
+        const currentPassword = typeof input.current_password === "string"
+          ? input.current_password
+          : "";
+        const newPassword = typeof input.new_password === "string" ? input.new_password : "";
+        if (newPassword.length < 8 || newPassword.length > 128) {
+          return json(
+            { error: "新しいパスワードは8〜128文字で入力してください" },
+            400,
+            visitor.cookie,
+          );
+        }
+        const found = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(user.id) as
+          | { password_hash: string }
+          | undefined;
+        if (!found || !verifyPassword(currentPassword, found.password_hash)) {
+          return json({ error: "現在のパスワードが正しくありません" }, 401, visitor.cookie);
+        }
+        const sessionId = getCookie(request, "tavy_session");
+        db.exec("BEGIN IMMEDIATE");
+        try {
+          db.prepare(
+            "UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = datetime('now') WHERE id = ?",
+          ).run(hashPassword(newPassword), user.id);
+          db.prepare("DELETE FROM sessions WHERE user_id = ? AND id <> ?").run(
+            user.id,
+            sessionId ?? "",
+          );
+          db.exec("COMMIT");
+        } catch (error) {
+          db.exec("ROLLBACK");
+          throw error;
+        }
+        return json({ ok: true }, 200, visitor.cookie);
+      }
       if (url.pathname === "/api/rooms" && request.method === "GET") {
         const rooms = user
           ? db.prepare(`SELECT r.id, r.slug, r.name, r.owner_id, r.created_at,

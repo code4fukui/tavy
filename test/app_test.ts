@@ -73,6 +73,48 @@ Deno.test("登録ユーザーだけがルームを作成できる", async () => 
   assertEquals((await request(handler, "/api/rooms", { name: "新ルーム" }, cookie)).status, 201);
 });
 
+Deno.test("ログインユーザーが現在のパスワードを確認して変更できる", async () => {
+  const { db, handler } = testApp();
+  assertEquals(
+    (await request(handler, "/api/password", {
+      current_password: "password123",
+      new_password: "new-password-456",
+    })).status,
+    401,
+  );
+  const login = await request(handler, "/api/login", { id: "owner", password: "password123" });
+  const cookie = login.headers.get("set-cookie")?.split(";")[0] ?? "";
+  assertEquals(
+    (await request(handler, "/api/password", {
+      current_password: "wrong-password",
+      new_password: "new-password-456",
+    }, cookie)).status,
+    401,
+  );
+  db.prepare("UPDATE users SET must_change_password = 1 WHERE id = ?").run("owner");
+  assertEquals(
+    (await request(handler, "/api/password", {
+      current_password: "password123",
+      new_password: "new-password-456",
+    }, cookie)).status,
+    200,
+  );
+  assertEquals(
+    (db.prepare("SELECT must_change_password FROM users WHERE id = ?").get("owner") as {
+      must_change_password: number;
+    }).must_change_password,
+    0,
+  );
+  assertEquals(
+    (await request(handler, "/api/login", { id: "owner", password: "password123" })).status,
+    401,
+  );
+  assertEquals(
+    (await request(handler, "/api/login", { id: "owner", password: "new-password-456" })).status,
+    200,
+  );
+});
+
 Deno.test("新規登録直後のsessionでルームを作成できる", async () => {
   const { handler } = testApp();
   const registered = await request(handler, "/api/register", {

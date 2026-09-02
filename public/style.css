@@ -102,9 +102,18 @@ button {
   align-items: center;
   gap: 8px;
 }
-#user-label {
+.user-label {
+  padding: 5px 2px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
   color: var(--muted);
   font-size: 12px;
+  cursor: pointer;
+}
+.user-label:hover,
+.user-label:focus-visible {
+  border-bottom-color: currentColor;
 }
 .room-panel {
   margin-bottom: 48px;

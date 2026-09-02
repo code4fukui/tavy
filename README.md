@@ -6,6 +6,7 @@
 ## 主な機能
 
 - ID / パスワードによるユーザー登録とログイン
+- ログイン後のユーザー名クリックによるパスワード変更
 - 登録ユーザーによる共有ルーム作成
 - 推測されにくい固有URL、リンクコピー、Web Share、QRコードによる招待
 - ルームごとの匿名つぶやき（最大280文字）
@@ -217,6 +218,7 @@ deno task check
 | `POST`         | `/api/register`           | `{ id, password }` で登録                    |
 | `POST`         | `/api/login`              | ログイン                                     |
 | `POST`         | `/api/logout`             | ログアウト                                   |
+| `POST`         | `/api/password`           | ログインユーザーのパスワード変更             |
 | `GET`          | `/api/me`                 | ログイン状態を取得                           |
 | `GET` / `POST` | `/api/rooms`              | 自分のルーム一覧 / 作成                      |
 | `GET`          | `/api/rooms/:slug`        | 共有ルーム情報を取得                         |
