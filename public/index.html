@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#f6f3ec">
     <meta name="description" content="今、感じたコトを、みんなの価値に変える共有サービス">
     <title>tavy（タヴィー）— 今、感じたコトを、みんなの価値に。</title>
-    <link rel="stylesheet" href="/style.css?v=20260902-1">
-    <script type="module" src="/app.js?v=20260902-1"></script>
+    <link rel="stylesheet" href="/style.css?v=20260902-2">
+    <script type="module" src="/app.js?v=20260902-2"></script>
   </head>
   <body>
     <header class="topbar">
@@ -43,6 +43,12 @@
         <div id="rooms" class="rooms" aria-live="polite"></div>
         <p id="no-rooms"
           class="empty">まだルームはありません。ログインして最初のルームを作りましょう。</p>
+      </section>
+
+      <section id="admin-panel" class="admin-panel" aria-labelledby="users-title" hidden>
+        <p class="eyebrow">ADMIN</p>
+        <h2 id="users-title">ユーザー一覧</h2>
+        <div id="users" class="users"></div>
       </section>
 
       <section id="room-content" hidden>

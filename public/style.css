@@ -118,6 +118,35 @@ button {
 .room-panel {
   margin-bottom: 48px;
 }
+.admin-panel {
+  margin: 0 0 64px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+.admin-panel h2 {
+  margin: 0 0 18px;
+  font: 600 28px/1.3 var(--serif);
+}
+.users {
+  border-top: 1px solid var(--line);
+}
+.user-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 100px 100px;
+  gap: 16px;
+  padding: 13px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.user-row span {
+  color: var(--muted);
+}
+@media (max-width: 620px) {
+  .user-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+  }
+}
 .room-heading {
   display: flex;
   align-items: end;
@@ -358,7 +387,8 @@ dialog input {
   stroke: #8ca175;
 }
 .room-view .intro,
-.room-view .room-panel {
+.room-view .room-panel,
+.room-view .admin-panel {
   display: none;
 }
 .room-view main {

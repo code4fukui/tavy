@@ -104,12 +104,24 @@ export function createHandler(db: Database, publicDir = "public", secureCookie =
         return json({ ok: true }, 200, visitor.cookie);
       }
       if (url.pathname === "/api/rooms" && request.method === "GET") {
-        const rooms = user
+        const rooms = user?.is_admin
+          ? db.prepare(`SELECT r.id, r.slug, r.name, r.owner_id, r.created_at,
+          count(p.id) AS post_count FROM rooms r LEFT JOIN posts p ON p.room_id = r.id
+          GROUP BY r.id ORDER BY r.created_at DESC`).all()
+          : user
           ? db.prepare(`SELECT r.id, r.slug, r.name, r.owner_id, r.created_at,
           count(p.id) AS post_count FROM rooms r LEFT JOIN posts p ON p.room_id = r.id
           WHERE r.owner_id = ? GROUP BY r.id ORDER BY r.created_at DESC`).all(user.id)
           : [];
         return json({ rooms }, 200, visitor.cookie);
+      }
+      if (url.pathname === "/api/users" && request.method === "GET") {
+        if (!user) return json({ error: "ログインしてください" }, 401, visitor.cookie);
+        if (!user.is_admin) return json({ error: "管理者権限が必要です" }, 403, visitor.cookie);
+        const users = db.prepare(`SELECT u.id, u.is_admin, u.must_change_password, u.created_at,
+          count(r.id) AS room_count FROM users u LEFT JOIN rooms r ON r.owner_id = u.id
+          GROUP BY u.id ORDER BY u.created_at ASC, u.id ASC`).all();
+        return json({ users }, 200, visitor.cookie);
       }
       const socketMatch = url.pathname.match(/^\/api\/rooms\/([A-Za-z0-9_-]+)\/ws$/);
       if (socketMatch && request.method === "GET") {
@@ -341,7 +353,9 @@ function createSessionResponse(
   const headers = new Headers({ "content-type": "application/json; charset=utf-8" });
   headers.append("set-cookie", sessionCookie(id, secure, 2592000));
   if (visitorCookie) headers.append("set-cookie", visitorCookie);
-  return Response.json({ user: { id: userId } }, { status, headers });
+  const user = db.prepare("SELECT id, is_admin, must_change_password FROM users WHERE id = ?")
+    .get(userId) as User;
+  return Response.json({ user }, { status, headers });
 }
 
 function roomExists(db: Database, id: number): boolean {

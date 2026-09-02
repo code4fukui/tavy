@@ -73,6 +73,42 @@ Deno.test("登録ユーザーだけがルームを作成できる", async () => 
   assertEquals((await request(handler, "/api/rooms", { name: "新ルーム" }, cookie)).status, 201);
 });
 
+Deno.test("管理者だけが全ルームとユーザー一覧を取得できる", async () => {
+  const { db, handler } = testApp();
+  db.prepare("INSERT INTO users (id, password_hash, is_admin) VALUES (?, ?, 1)").run(
+    "admin_user",
+    hashPassword("admin-password"),
+  );
+  db.prepare("INSERT INTO rooms (name, owner_id, slug) VALUES (?, ?, ?)").run(
+    "管理者ルーム",
+    "admin_user",
+    "admin-room",
+  );
+  assertEquals((await request(handler, "/api/users")).status, 401);
+
+  const ownerLogin = await request(handler, "/api/login", {
+    id: "owner",
+    password: "password123",
+  });
+  const ownerCookie = ownerLogin.headers.get("set-cookie")?.split(";")[0] ?? "";
+  assertEquals((await request(handler, "/api/users", undefined, ownerCookie)).status, 403);
+  const ownerRooms = (await request(handler, "/api/rooms", undefined, ownerCookie)).json();
+  assertEquals((await ownerRooms).rooms.map((room: { slug: string }) => room.slug), ["test-room"]);
+
+  const adminLogin = await request(handler, "/api/login", {
+    id: "admin_user",
+    password: "admin-password",
+  });
+  const adminResult = await adminLogin.clone().json();
+  assertEquals(adminResult.user.is_admin, 1);
+  const adminCookie = adminLogin.headers.get("set-cookie")?.split(";")[0] ?? "";
+  const adminRooms = await (await request(handler, "/api/rooms", undefined, adminCookie)).json();
+  assertEquals(adminRooms.rooms.length, 2);
+  const users = await (await request(handler, "/api/users", undefined, adminCookie)).json();
+  assertEquals(users.users.map((item: { id: string }) => item.id), ["owner", "admin_user"]);
+  assertEquals(users.users.map((item: { room_count: number }) => item.room_count), [1, 1]);
+});
+
 Deno.test("ログインユーザーが現在のパスワードを確認して変更できる", async () => {
   const { db, handler } = testApp();
   assertEquals(

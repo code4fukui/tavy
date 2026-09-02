@@ -10,6 +10,7 @@ const roomDialog = $("#room-dialog");
 const shareDialog = $("#share-dialog");
 let user = null;
 let rooms = [];
+let users = [];
 let room = null;
 let posts = [];
 let replyTo = null;
@@ -181,6 +182,7 @@ function syncUser() {
   $("#login-open").hidden = Boolean(user);
   $("#register-open").hidden = Boolean(user);
   $("#logout").hidden = !user;
+  $("#admin-panel").hidden = !user?.is_admin;
 }
 async function loadRooms() {
   const owned = (await api("/api/rooms")).rooms;
@@ -200,6 +202,7 @@ async function loadRooms() {
   ];
   writeRoomHistory(rooms.filter((item) => history.includes(item.slug)).map((item) => item.slug));
   renderRooms();
+  if (user?.is_admin) await loadUsers();
 }
 function renderRooms() {
   $("#no-rooms").hidden = rooms.length > 0;
@@ -211,9 +214,26 @@ function renderRooms() {
     const name = document.createElement("strong");
     name.textContent = item.name;
     const count = document.createElement("span");
-    count.textContent = `${item.post_count}件`;
+    count.textContent = user?.is_admin
+      ? `${item.owner_id} · ${item.post_count}件`
+      : `${item.post_count}件`;
     button.append(name, count);
     return button;
+  }));
+}
+async function loadUsers() {
+  users = (await api("/api/users")).users;
+  $("#users").replaceChildren(...users.map((item) => {
+    const row = document.createElement("div");
+    row.className = "user-row";
+    const id = document.createElement("strong");
+    id.textContent = item.id;
+    const role = document.createElement("span");
+    role.textContent = item.is_admin ? "管理者" : "ユーザー";
+    const rooms = document.createElement("span");
+    rooms.textContent = `${item.room_count}ルーム`;
+    row.append(id, role, rooms);
+    return row;
   }));
 }
 async function openRoom(slug, updateUrl = false) {
