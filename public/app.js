@@ -22,6 +22,12 @@ let socketRetry = null;
 let realtimeRefresh = null;
 let socketHeartbeat = null;
 let inlineReplyActive = false;
+let sabera = null;
+let saberaConnected = false;
+let saberaQueue = [];
+let saberaSending = false;
+let saberaLastSentAt = 0;
+let saberaRoomSlug = null;
 
 memo.addEventListener("input", () => $("#counter").textContent = `${memo.value.length} / 280`);
 memo.addEventListener("keydown", (event) => {
@@ -175,6 +181,7 @@ $("#native-share").addEventListener("click", async () => {
   if (navigator.share) await navigator.share({ title: `${room.name} | tavy`, url });
   else await navigator.clipboard.writeText(url);
 });
+$("#sabera-room").addEventListener("click", toggleSabera);
 
 function syncUser() {
   $("#user-label").textContent = user ? user.id : "";
@@ -185,22 +192,8 @@ function syncUser() {
   $("#admin-panel").hidden = !user?.is_admin;
 }
 async function loadRooms() {
-  const owned = (await api("/api/rooms")).rooms;
-  const history = readRoomHistory();
-  const visited = await Promise.all(history.map(async (slug) => {
-    try {
-      return (await api(`/api/rooms/${slug}`)).room;
-    } catch {
-      return null;
-    }
-  }));
-  const bySlug = new Map(owned.map((item) => [item.slug, item]));
-  for (const item of visited) if (item) bySlug.set(item.slug, item);
-  rooms = [
-    ...history.map((slug) => bySlug.get(slug)).filter(Boolean),
-    ...owned.filter((item) => !history.includes(item.slug)),
-  ];
-  writeRoomHistory(rooms.filter((item) => history.includes(item.slug)).map((item) => item.slug));
+  const listed = (await api("/api/rooms")).rooms;
+  rooms = listed;
   renderRooms();
   if (user?.is_admin) await loadUsers();
 }
@@ -237,6 +230,7 @@ async function loadUsers() {
   }));
 }
 async function openRoom(slug, updateUrl = false) {
+  if (saberaConnected && saberaRoomSlug !== slug) await disconnectSabera();
   room = (await api(`/api/rooms/${slug}`)).room;
   rememberRoom(room.slug);
   if (updateUrl) history.pushState({}, "", `/r/${slug}`);
@@ -244,6 +238,7 @@ async function openRoom(slug, updateUrl = false) {
   $("#room-content").hidden = false;
   $("#current-room-name").textContent = room.name;
   $("#export-room").href = `/api/rooms/${room.slug}/export.json`;
+  updateSaberaLabel();
   clearReply();
   closeComposer();
   await loadPosts(true);
@@ -269,6 +264,7 @@ function rememberRoom(slug) {
   writeRoomHistory([slug, ...readRoomHistory().filter((item) => item !== slug)]);
 }
 async function showHome() {
+  await disconnectSabera();
   disconnectRoomSocket();
   room = null;
   posts = [];
@@ -325,6 +321,7 @@ document.addEventListener("visibilitychange", () => {
 });
 async function loadPosts(full = false) {
   if (!room || inlineReplyActive) return;
+  const previousIds = new Set(posts.map((post) => post.id));
   const params = new URLSearchParams({ room: room.slug });
   if (savedOnly) params.set("saved", "1");
   const sinceId = full || posts.length === 0 ? 0 : Math.max(...posts.map((post) => post.id));
@@ -337,7 +334,102 @@ async function loadPosts(full = false) {
   } else {
     posts = incoming;
   }
+  if (saberaConnected && saberaRoomSlug === room.slug) {
+    const newPosts = incoming.filter((post) => !previousIds.has(post.id));
+    newPosts.forEach(queueSaberaPost);
+  }
   renderFilteredGraph();
+}
+
+function updateSaberaLabel() {
+  const button = $("#sabera-room");
+  button.textContent = saberaConnected && saberaRoomSlug === room?.slug
+    ? "SABERA切断"
+    : "SABERA接続";
+  button.setAttribute("aria-pressed", String(saberaConnected && saberaRoomSlug === room?.slug));
+}
+
+async function toggleSabera() {
+  if (saberaConnected) {
+    await disconnectSabera();
+    return;
+  }
+  if (!room) return;
+  const button = $("#sabera-room");
+  button.disabled = true;
+  try {
+    // deno-lint-ignore no-import-prefix
+    const { SaberaClient } = await import("https://code4fukui.github.io/webglass-sdk/sabera.js");
+    sabera = new SaberaClient();
+    await sabera.connect();
+    saberaConnected = true;
+    saberaRoomSlug = room.slug;
+    saberaQueue = [];
+    saberaLastSentAt = 0;
+    updateSaberaLabel();
+    await sendSaberaPost(posts.at(-1));
+    showToast("SABERAに接続しました");
+  } catch (error) {
+    console.error(error);
+    sabera = null;
+    saberaConnected = false;
+    saberaRoomSlug = null;
+    updateSaberaLabel();
+    showToast("SABERAに接続できませんでした");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function disconnectSabera() {
+  saberaConnected = false;
+  saberaRoomSlug = null;
+  saberaQueue = [];
+  updateSaberaLabel();
+  if (sabera) {
+    try {
+      await sabera.disconnect();
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  sabera = null;
+}
+
+function queueSaberaPost(post) {
+  if (!post || !saberaConnected || saberaRoomSlug !== room?.slug) return;
+  saberaQueue.push(post);
+  void drainSaberaQueue();
+}
+
+async function drainSaberaQueue() {
+  if (saberaSending || !saberaConnected || !saberaQueue.length) return;
+  saberaSending = true;
+  try {
+    while (saberaConnected && saberaQueue.length) {
+      const wait = Math.max(0, 3000 - (Date.now() - saberaLastSentAt));
+      if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+      const post = saberaQueue.shift();
+      if (post) await sendSaberaPost(post);
+    }
+  } catch (error) {
+    console.error(error);
+    saberaConnected = false;
+    saberaRoomSlug = null;
+    saberaQueue = [];
+    updateSaberaLabel();
+    showToast("SABERAへの送信に失敗しました");
+  } finally {
+    saberaSending = false;
+    if (saberaConnected && saberaQueue.length) void drainSaberaQueue();
+  }
+}
+
+async function sendSaberaPost(post) {
+  if (!post || !saberaConnected || !sabera) return;
+  await sabera.showScreen(0x47);
+  await sabera.sendText(post.body);
+  saberaLastSentAt = Date.now();
 }
 
 function renderFilteredGraph() {

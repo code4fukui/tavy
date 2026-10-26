@@ -22,6 +22,7 @@ function testApp() {
       "003_add_threaded_replies.sql",
       "004_room_share_urls.sql",
       "005_add_post_visitor.sql",
+      "006_add_room_members.sql",
     ]
   ) {
     db.exec(Deno.readTextFileSync(`migrations/${name}`));
@@ -107,6 +108,31 @@ Deno.test("管理者だけが全ルームとユーザー一覧を取得できる
   const users = await (await request(handler, "/api/users", undefined, adminCookie)).json();
   assertEquals(users.users.map((item: { id: string }) => item.id), ["owner", "admin_user"]);
   assertEquals(users.users.map((item: { room_count: number }) => item.room_count), [1, 1]);
+});
+
+Deno.test("ルーム一覧は作成者またはログインして参加したユーザーだけに表示する", async () => {
+  const { db, handler } = testApp();
+  db.prepare("INSERT INTO users (id, password_hash) VALUES (?, ?)").run(
+    "visitor",
+    hashPassword("visitor-password"),
+  );
+  db.prepare("INSERT INTO rooms (name, owner_id, slug) VALUES (?, ?, ?)").run(
+    "非公開ルーム",
+    "owner",
+    "private-room",
+  );
+
+  const login = await request(handler, "/api/login", {
+    id: "visitor",
+    password: "visitor-password",
+  });
+  const cookie = login.headers.get("set-cookie")?.split(";")[0] ?? "";
+  const before = await (await request(handler, "/api/rooms", undefined, cookie)).json();
+  assertEquals(before.rooms.map((room: { slug: string }) => room.slug), []);
+
+  assertEquals((await request(handler, "/api/rooms/private-room", undefined, cookie)).status, 200);
+  const after = await (await request(handler, "/api/rooms", undefined, cookie)).json();
+  assertEquals(after.rooms.map((room: { slug: string }) => room.slug), ["private-room"]);
 });
 
 Deno.test("ログインユーザーが現在のパスワードを確認して変更できる", async () => {

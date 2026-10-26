@@ -111,7 +111,9 @@ export function createHandler(db: Database, publicDir = "public", secureCookie =
           : user
           ? db.prepare(`SELECT r.id, r.slug, r.name, r.owner_id, r.created_at,
           count(p.id) AS post_count FROM rooms r LEFT JOIN posts p ON p.room_id = r.id
-          WHERE r.owner_id = ? GROUP BY r.id ORDER BY r.created_at DESC`).all(user.id)
+          WHERE r.owner_id = ? OR EXISTS (
+            SELECT 1 FROM room_members m WHERE m.room_id = r.id AND m.user_id = ?
+          ) GROUP BY r.id ORDER BY r.created_at DESC`).all(user.id, user.id)
           : [];
         return json({ rooms }, 200, visitor.cookie);
       }
@@ -153,9 +155,13 @@ export function createHandler(db: Database, publicDir = "public", secureCookie =
         const room = db.prepare(`SELECT r.id, r.slug, r.name, r.owner_id, r.created_at,
           count(p.id) AS post_count FROM rooms r LEFT JOIN posts p ON p.room_id = r.id
           WHERE r.slug = ? GROUP BY r.id`).get(roomMatch[1]);
-        return room
-          ? json({ room }, 200, visitor.cookie)
-          : json({ error: "ルームが見つかりません" }, 404, visitor.cookie);
+        if (!room) return json({ error: "ルームが見つかりません" }, 404, visitor.cookie);
+        if (user) {
+          db.prepare(`INSERT INTO room_members (room_id, user_id)
+            VALUES (?, ?) ON CONFLICT(room_id, user_id) DO UPDATE SET visited_at = excluded.visited_at`)
+            .run((room as { id: number }).id, user.id);
+        }
+        return json({ room }, 200, visitor.cookie);
       }
       if (url.pathname === "/api/rooms" && request.method === "POST") {
         if (!user) {
