@@ -28,6 +28,7 @@ let saberaQueue = [];
 let saberaSending = false;
 let saberaLastSentAt = 0;
 let saberaRoomSlug = null;
+let saberaClockTimer = null;
 
 memo.addEventListener("input", () => $("#counter").textContent = `${memo.value.length} / 280`);
 memo.addEventListener("keydown", (event) => {
@@ -368,11 +369,22 @@ async function toggleSabera() {
     saberaLastSentAt = 0;
     updateSaberaLabel();
     await sendSaberaPost(posts.at(-1));
+    clearInterval(saberaClockTimer);
+    saberaClockTimer = setInterval(() => {
+      if (
+        saberaConnected && saberaRoomSlug === room?.slug && !saberaSending &&
+        saberaQueue.length === 0
+      ) {
+        void sendSaberaPost(posts.at(-1));
+      }
+    }, 60_000);
     showToast("SABERAに接続しました");
   } catch (error) {
     console.error(error);
     sabera = null;
     saberaConnected = false;
+    clearInterval(saberaClockTimer);
+    saberaClockTimer = null;
     saberaRoomSlug = null;
     updateSaberaLabel();
     showToast("SABERAに接続できませんでした");
@@ -383,6 +395,8 @@ async function toggleSabera() {
 
 async function disconnectSabera() {
   saberaConnected = false;
+  clearInterval(saberaClockTimer);
+  saberaClockTimer = null;
   saberaRoomSlug = null;
   saberaQueue = [];
   updateSaberaLabel();
@@ -415,6 +429,8 @@ async function drainSaberaQueue() {
   } catch (error) {
     console.error(error);
     saberaConnected = false;
+    clearInterval(saberaClockTimer);
+    saberaClockTimer = null;
     saberaRoomSlug = null;
     saberaQueue = [];
     updateSaberaLabel();
@@ -426,9 +442,15 @@ async function drainSaberaQueue() {
 }
 
 async function sendSaberaPost(post) {
-  if (!post || !saberaConnected || !sabera) return;
+  if (!saberaConnected || !sabera) return;
   await sabera.showScreen(0x47);
-  await sabera.sendText(post.body);
+  const time = new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date());
+  const text = post ? `${post.body}\n\n          ${time}` : time;
+  await sabera.sendText(text);
   saberaLastSentAt = Date.now();
 }
 
